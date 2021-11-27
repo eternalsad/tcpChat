@@ -48,10 +48,12 @@ func read(conn net.Conn) {
 }
 
 func write(conn net.Conn, reader *bufio.Reader) {
-	username, err := reader.ReadString('\n') // ne ponimau pochemu on reagiruet na \r
+	scanner := bufio.NewScanner(reader)
+
+	username := scanner.Text() // ne ponimau pochemu on reagiruet na \r
 	// a ne na \n maybe potomu chto tam sequence \r\n i on jdal \n
-	logFatal(err)
-	username = strings.Trim(username, "\r\n")
+	// logFatal(err)
+	username = strings.Trim(username, "\r\n ")
 	conn.Write([]byte(username))
 	for {
 		msg, err := reader.ReadString('\n')
