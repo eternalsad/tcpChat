@@ -55,18 +55,21 @@ func (s *Server) Listen() error {
 }
 
 func (s *Server) handleConnection(client *models.Client) {
+	// client.Connection.Write([]byte("[ENTER YOUR NAME]:\n"))
+	s.Welcome(client)
+	rd := bufio.NewReader(client.Connection)
+	name, err := rd.ReadString('\n')
+	name = strings.Trim(name, "\r\n")
+	client.Name = name
+	s.msgs <- &models.Message{Text: fmt.Sprintf("\n%v joined the chat\n", name), Source: client}
 	s.Mtx.Lock()
 	s.Clients = append(s.Clients, client)
 	s.UserCount++
 	s.Mtx.Unlock()
-	rd := bufio.NewReader(client.Connection)
-	client.Connection.Write([]byte("Enter your name\n"))
-	name, err := rd.ReadString('\n')
-	name = strings.Trim(name, "\r\n")
-	client.Name = name
 	if err != nil {
 		fmt.Println("error while reading name")
 	}
+	// s.BroadCast(&models.Message{Text: fmt.Sprintf("%v entered chat", name), })
 	for {
 		dt := time.Now()
 		timeStamp := dt.Format("2006-01-02 15:04:05")
@@ -79,8 +82,6 @@ func (s *Server) handleConnection(client *models.Client) {
 			break
 		}
 		if str != "\n" {
-			// msgs <- fmt.Sprintf("[%v] [%v]: %v", timeStamp, name, m)
-
 			msg := &models.Message{
 				Text:   str,
 				Source: client,
@@ -98,16 +99,24 @@ func (s *Server) Accept(conn net.Conn) (*models.Client, error) {
 	return nil, fmt.Errorf("Maximum ammount of users reached")
 }
 
-func (s *Server) BroadCast(msg *models.Message) {
+func (s *Server) SendMessage(msg *models.Message) {
 	dt := time.Now()
 	timeStamp := dt.Format("2006-01-02 15:04:05")
 	message := fmt.Sprintf("\n[%v][%v]:%v", timeStamp, msg.Source.Name, msg.Text)
+	msg.Text = message
+	s.BroadCast(msg)
+}
 
+// send string message to other clients
+func (s *Server) BroadCast(msg *models.Message) {
+	dt := time.Now()
+	timeStamp := dt.Format("2006-01-02 15:04:05")
 	s.Mtx.Lock()
 	for _, c := range s.Clients {
 		if c.Connection != msg.Source.Connection {
 			postfix := fmt.Sprintf("[%v][%v]:", timeStamp, c.Name)
-			c.Connection.Write([]byte(message + postfix))
+			message := msg.Text + postfix
+			c.Connection.Write([]byte(message))
 		}
 	}
 	s.Mtx.Unlock()
@@ -118,13 +127,10 @@ func (s *Server) removeClient(client *models.Client) {
 	dt := time.Now()
 	timeStamp := dt.Format("2006-01-02 15:04:05")
 	message := fmt.Sprintf("\n[%v]:%v%v", timeStamp, client.Name, " has left the chat...\n")
+	s.msgs <- &models.Message{Text: message, Source: client}
 	s.Mtx.Lock()
 	s.Clients = append(s.Clients[:client.ID], s.Clients[client.ID:]...)
 	s.UserCount--
-	for _, c := range s.Clients {
-		postfix := fmt.Sprintf("[%v][%v]:", timeStamp, c.Name)
-		c.Connection.Write([]byte(message + postfix))
-	}
 	s.Mtx.Unlock()
 }
 
@@ -139,4 +145,11 @@ func (s *Server) Serve() {
 			go s.removeClient(inactive)
 		}
 	}
+}
+
+// Welcome prints Welcome prompt to new user
+func (s *Server) Welcome(client *models.Client) {
+	msg := "Welcome to TCP-Chat!\n         _nnnn_\n        dGGGGMMb\n       @p~qp~~qMb\n       M|@||@) M|\n       @,----.JM|\n      JS^\\__/  qKL\n     dZP        qKRb\n    dZP          qKKb\n   fZP            SMMb\n   HZM            MMMM\n   FqM            MMMM\n __| \".        |\\dS\"qML\n |    `.       | `' \\Zq\n_)      \\.___.,|     .'\n\\____   )MMMMMP|   .'\n     `-'       `--'\n"
+	msg = msg + "[ENTER YOUR NAME]: "
+	client.Connection.Write([]byte(msg))
 }
