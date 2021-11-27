@@ -3,13 +3,11 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"os"
 	"strings"
-
-	"github.com/jroimartin/gocui"
+	"sync"
 )
 
 func logFatal(err error) {
@@ -17,6 +15,8 @@ func logFatal(err error) {
 		log.Fatal(err)
 	}
 }
+
+var mtx sync.Mutex
 
 func main() {
 	connection, err := net.Dial("tcp", "localhost:4000")
@@ -32,45 +32,32 @@ func main() {
 }
 
 func read(conn net.Conn) {
-	reader := bufio.NewReader(conn)
+	// mtx.Lock()
+	rd := bufio.NewReader(conn)
+	// mtx.Unlock()
 	for {
-		incomingMsg, err := reader.ReadString(':')
-		if err == io.EOF {
+		// mtx.Lock()
+		msg, err := rd.ReadString(':')
+		if err != nil {
 			conn.Close()
-			fmt.Println("Connection closed")
-			os.Exit(0)
+			return // maybe os.Exit()?
 		}
-		fmt.Printf("%s", incomingMsg) //------------------------------\n
+		fmt.Print(msg)
+		// mtx.Unlock()
 	}
 }
 
 func write(conn net.Conn, reader *bufio.Reader) {
-	username, err := reader.ReadString(':')
+	username, err := reader.ReadString('\n') // ne ponimau pochemu on reagiruet na \r
+	// a ne na \n maybe potomu chto tam sequence \r\n i on jdal \n
 	logFatal(err)
-	username = strings.Trim(username, " \r\n")
+	username = strings.Trim(username, "\r\n")
 	conn.Write([]byte(username))
 	for {
 		msg, err := reader.ReadString('\n')
 		if err != nil {
 			break
 		}
-
-		msg = fmt.Sprintf("[%s]: %s\n", username, strings.Trim(msg, " \r\n"))
 		conn.Write([]byte(msg))
 	}
-}
-
-func layout(g *gocui.Gui) error {
-	maxX, maxY := g.Size()
-	if v, err := g.SetView("hello", maxX/2-7, maxY/2, maxX/2+7, maxY/2+2); err != nil {
-		if err != gocui.ErrUnknownView {
-			return err
-		}
-		fmt.Fprintln(v, "Hello world!")
-	}
-	return nil
-}
-
-func quit(g *gocui.Gui, v *gocui.View) error {
-	return gocui.ErrQuit
 }
