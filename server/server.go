@@ -12,6 +12,7 @@ import (
 )
 
 const MaxClientAmmount = 10
+const timeFormat = "2006-01-02 15:04:05"
 
 type Server struct {
 	Clients         []*models.Client
@@ -72,7 +73,7 @@ func (s *Server) handleConnection(client *models.Client) {
 	// s.BroadCast(&models.Message{Text: fmt.Sprintf("%v entered chat", name), })
 	for {
 		dt := time.Now()
-		timeStamp := dt.Format("2006-01-02 15:04:05")
+		timeStamp := dt.Format(timeFormat)
 		prefix := fmt.Sprintf("[%v][%v]:", timeStamp, name)
 		client.Connection.Write([]byte(prefix))
 		str, err := rd.ReadString('\n')
@@ -101,7 +102,7 @@ func (s *Server) Accept(conn net.Conn) (*models.Client, error) {
 
 func (s *Server) SendMessage(msg *models.Message) {
 	dt := time.Now()
-	timeStamp := dt.Format("2006-01-02 15:04:05")
+	timeStamp := dt.Format(timeFormat)
 	message := fmt.Sprintf("\n[%v][%v]:%v", timeStamp, msg.Source.Name, msg.Text)
 	msg.Text = message
 	s.BroadCast(msg)
@@ -110,7 +111,7 @@ func (s *Server) SendMessage(msg *models.Message) {
 // send string message to other clients
 func (s *Server) BroadCast(msg *models.Message) {
 	dt := time.Now()
-	timeStamp := dt.Format("2006-01-02 15:04:05")
+	timeStamp := dt.Format(timeFormat)
 	s.Mtx.Lock()
 	for _, c := range s.Clients {
 		if c.Connection != msg.Source.Connection {
@@ -125,7 +126,7 @@ func (s *Server) BroadCast(msg *models.Message) {
 func (s *Server) removeClient(client *models.Client) {
 	client.Connection.Close()
 	dt := time.Now()
-	timeStamp := dt.Format("2006-01-02 15:04:05")
+	timeStamp := dt.Format(timeFormat)
 	message := fmt.Sprintf("\n[%v]:%v%v", timeStamp, client.Name, " has left the chat...\n")
 	s.msgs <- &models.Message{Text: message, Source: client}
 	s.Mtx.Lock()
