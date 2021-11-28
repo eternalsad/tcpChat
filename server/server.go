@@ -61,6 +61,7 @@ func (s *Server) handleConnection(client *models.Client) {
 	rd := bufio.NewReader(client.Connection)
 	name, err := rd.ReadString('\n')
 	name = strings.Trim(name, "\r\n")
+	// log.Println(name)
 	client.Name = name
 	s.msgs <- &models.Message{Text: fmt.Sprintf("\n%v joined the chat\n", name), Source: client}
 	s.Mtx.Lock()
@@ -118,6 +119,7 @@ func (s *Server) BroadCast(msg *models.Message) {
 			postfix := fmt.Sprintf("[%v][%v]:", timeStamp, c.Name)
 			message := msg.Text + postfix
 			c.Connection.Write([]byte(message))
+			log.Println(message)
 		}
 	}
 	s.Mtx.Unlock()
@@ -141,7 +143,7 @@ func (s *Server) Serve() {
 		case client := <-s.clientsChan:
 			go s.handleConnection(client)
 		case msg := <-s.msgs:
-			go s.BroadCast(msg)
+			go s.SendMessage(msg)
 		case inactive := <-s.inactiveClients:
 			go s.removeClient(inactive)
 		}
