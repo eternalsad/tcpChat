@@ -43,13 +43,8 @@ func write(conn net.Conn, reader *bufio.Reader) {
 	username := strings.Trim(string(name), "\n")
 	conn.Write([]byte(username))
 	for {
-		// msg, err := reader.ReadString('\n')
-		// if err != nil {
-		// 	break
-		// }
 		msg := make([]byte, 2048)
 		reader.Read(msg)
 		conn.Write([]byte(msg))
 	}
-
 }

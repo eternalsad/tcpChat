@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net-cat/models"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -21,15 +22,23 @@ type Server struct {
 	inactiveClients chan *models.Client
 	Mtx             sync.Mutex
 	UserCount       int
+	writer          *log.Logger
 }
 
 func NewServer() *Server {
+	file, err := os.OpenFile("logs.txt", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+
+	if err != nil {
+		log.Fatal("can't create message log file")
+	}
+
 	return &Server{
 		Clients:         make([]*models.Client, 0),
 		msgs:            make(chan *models.Message),
 		clientsChan:     make(chan *models.Client),
 		inactiveClients: make(chan *models.Client),
 		UserCount:       0,
+		writer:          log.New(file, "", 0),
 	}
 }
 
@@ -63,8 +72,11 @@ func (s *Server) handleConnection(client *models.Client) {
 	name = strings.Trim(name, "\r\n")
 	// log.Println(name)
 	client.Name = name
-	s.msgs <- &models.Message{Text: fmt.Sprintf("\n%v joined the chat\n", name), Source: client}
+	// s.msgs <- &models.Message{Text: fmt.Sprintf("%v joined the chat\n", name), Source: client}
 	s.Mtx.Lock()
+	dt := time.Now()
+	timeStamp := dt.Format(timeFormat)
+	go s.BroadCast(&models.Message{Text: fmt.Sprintf("\n[%v]%v joined the chat\n", timeStamp, name), Source: client})
 	s.Clients = append(s.Clients, client)
 	s.UserCount++
 	s.Mtx.Unlock()
@@ -95,7 +107,9 @@ func (s *Server) handleConnection(client *models.Client) {
 }
 
 func (s *Server) Accept(conn net.Conn) (*models.Client, error) {
+	s.Mtx.Lock()
 	if s.UserCount < MaxClientAmmount {
+		s.Mtx.Unlock()
 		return &models.Client{Connection: conn, ID: s.UserCount}, nil
 	}
 	return nil, fmt.Errorf("Maximum ammount of users reached")
@@ -107,6 +121,7 @@ func (s *Server) SendMessage(msg *models.Message) {
 	message := fmt.Sprintf("\n[%v][%v]:%v", timeStamp, msg.Source.Name, msg.Text)
 	msg.Text = message
 	s.BroadCast(msg)
+	// s.writeToFile(message)
 }
 
 // send string message to other clients
@@ -123,6 +138,11 @@ func (s *Server) BroadCast(msg *models.Message) {
 		}
 	}
 	s.Mtx.Unlock()
+	s.writeToFile(msg.Text)
+}
+
+func (s *Server) writeToFile(line string) {
+	s.writer.Output(2, line)
 }
 
 func (s *Server) removeClient(client *models.Client) {
@@ -130,8 +150,9 @@ func (s *Server) removeClient(client *models.Client) {
 	dt := time.Now()
 	timeStamp := dt.Format(timeFormat)
 	message := fmt.Sprintf("\n[%v]:%v%v", timeStamp, client.Name, " has left the chat...\n")
-	s.msgs <- &models.Message{Text: message, Source: client}
+	// s.msgs <- &models.Message{Text: message, Source: client}
 	s.Mtx.Lock()
+	go s.BroadCast(&models.Message{Text: message, Source: client})
 	s.Clients = append(s.Clients[:client.ID], s.Clients[client.ID:]...)
 	s.UserCount--
 	s.Mtx.Unlock()
@@ -144,6 +165,7 @@ func (s *Server) Serve() {
 			go s.handleConnection(client)
 		case msg := <-s.msgs:
 			go s.SendMessage(msg)
+			// s.writeToFile()
 		case inactive := <-s.inactiveClients:
 			go s.removeClient(inactive)
 		}
