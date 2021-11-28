@@ -44,7 +44,12 @@ func write(conn net.Conn, reader *bufio.Reader) {
 	conn.Write([]byte(username))
 	for {
 		msg := make([]byte, 2048)
-		reader.Read(msg)
-		conn.Write([]byte(msg))
+		_, err := reader.Read(msg)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+		str := strings.Trim(string(msg), "\n")
+		conn.Write([]byte(str))
 	}
 }
