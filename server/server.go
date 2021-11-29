@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net-cat/models"
@@ -23,11 +24,11 @@ type Server struct {
 	Mtx             sync.Mutex
 	UserCount       int
 	writer          *log.Logger
-	reader          *bufio.Scanner
+	logs            *os.File
 }
 
 func NewServer() *Server {
-	file, err := os.OpenFile("logs.txt", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	file, err := os.OpenFile("logs.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 
 	if err != nil {
 		log.Fatal("can't create message log file")
@@ -40,7 +41,8 @@ func NewServer() *Server {
 		inactiveClients: make(chan *models.Client),
 		UserCount:       0,
 		writer:          log.New(file, "", 0),
-		reader:          bufio.NewScanner(file),
+		logs:            file,
+		// reader:          bufio.NewScanner(file),
 	}
 }
 
@@ -85,7 +87,7 @@ func (s *Server) handleConnection(client *models.Client) {
 	s.Clients = append(s.Clients, client)
 	s.UserCount++
 	s.Mtx.Unlock()
-	s.lookForMessages(client)
+	s.loadPreviousMessages(client)
 	// s.BroadCast(&models.Message{Text: fmt.Sprintf("%v entered chat", name), })
 	for {
 		dt := time.Now()
@@ -138,7 +140,7 @@ func (s *Server) BroadCast(msg *models.Message) {
 			postfix := fmt.Sprintf("[%v][%v]:", timeStamp, c.Name)
 			message := msg.Text + postfix
 			c.Connection.Write([]byte(message))
-			log.Println(message)
+			log.Print(message)
 		}
 	}
 	s.Mtx.Unlock()
@@ -148,6 +150,8 @@ func (s *Server) BroadCast(msg *models.Message) {
 func (s *Server) writeToFile(line string) {
 	log.Println(len(line))
 	s.writer.Output(2, line)
+	// s.writer.Print(line)
+	// fmt.Fprintf(s.logs, "%v", line[:len(line)-1])
 }
 
 func (s *Server) removeClient(client *models.Client) {
@@ -184,10 +188,18 @@ func (s *Server) Welcome(client *models.Client) {
 	client.Connection.Write([]byte(msg))
 }
 
-func (s *Server) lookForMessages(client *models.Client) {
-	// s.Mtx.Lock()
-	for s.reader.Scan() {
-		client.Connection.Write([]byte(s.reader.Text()))
+func (s *Server) loadPreviousMessages(client *models.Client) {
+	// file, err := os.Open("logs.txt")
+	// if err != nil {
+	// 	fmt.Println(err)
+	// }
+	// client.Connection.Write([]byte("load"))
+	s.Mtx.Lock()
+	text, err := ioutil.ReadAll(s.logs)
+	s.Mtx.Unlock()
+	if err != nil {
+		fmt.Println(err)
+		return
 	}
-	// s.Mtx.Unlock()
+	client.Connection.Write(text)
 }
