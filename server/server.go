@@ -25,6 +25,7 @@ type Server struct {
 	UserCount       int
 	writer          *log.Logger
 	logs            *os.File
+	logsFilename    string
 }
 
 func NewServer() *Server {
@@ -41,7 +42,8 @@ func NewServer() *Server {
 		inactiveClients: make(chan *models.Client),
 		UserCount:       0,
 		writer:          log.New(file, "", 0),
-		logs:            file,
+		logsFilename:    "logs.txt",
+		// logs:            file,
 		// reader:          bufio.NewScanner(file),
 	}
 }
@@ -80,6 +82,7 @@ func (s *Server) handleConnection(client *models.Client) {
 	// log.Println(name)
 	client.Name = name
 	// s.msgs <- &models.Message{Text: fmt.Sprintf("%v joined the chat\n", name), Source: client}
+	s.loadPreviousMessages(client)
 	s.Mtx.Lock()
 	dt := time.Now()
 	timeStamp := dt.Format(timeFormat)
@@ -87,7 +90,6 @@ func (s *Server) handleConnection(client *models.Client) {
 	s.Clients = append(s.Clients, client)
 	s.UserCount++
 	s.Mtx.Unlock()
-	s.loadPreviousMessages(client)
 	// s.BroadCast(&models.Message{Text: fmt.Sprintf("%v entered chat", name), })
 	for {
 		dt := time.Now()
@@ -144,14 +146,16 @@ func (s *Server) BroadCast(msg *models.Message) {
 		}
 	}
 	s.Mtx.Unlock()
-	s.writeToFile(msg.Text)
+	s.writeToFile(msg.Text[1:])
 }
 
 func (s *Server) writeToFile(line string) {
-	log.Println(len(line))
+	// log.Println(len(line))
+	s.Mtx.Lock()
 	s.writer.Output(2, line)
-	// s.writer.Print(line)
-	// fmt.Fprintf(s.logs, "%v", line[:len(line)-1])
+	s.Mtx.Unlock()
+	// s.writer.Printf("%v", line)
+	// fmt.Fprintf(s.logs, "%v", line[1:])
 }
 
 func (s *Server) removeClient(client *models.Client) {
@@ -188,16 +192,19 @@ func (s *Server) Welcome(client *models.Client) {
 	client.Connection.Write([]byte(msg))
 }
 
+// loadPreviousMessage sends old messages to client
 func (s *Server) loadPreviousMessages(client *models.Client) {
-	// file, err := os.Open("logs.txt")
-	// if err != nil {
-	// 	fmt.Println(err)
-	// }
-	// client.Connection.Write([]byte("load"))
+	// TO DO POSSIBLE MEMORY LEAK
+	file, err := os.OpenFile(s.logsFilename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+
+	if err != nil {
+		log.Fatal("can't create message log file")
+	}
 	s.Mtx.Lock()
-	text, err := ioutil.ReadAll(s.logs)
+	text, err := ioutil.ReadAll(file)
 	s.Mtx.Unlock()
 	if err != nil {
+		fmt.Print("error during loading messages")
 		fmt.Println(err)
 		return
 	}
