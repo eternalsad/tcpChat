@@ -23,6 +23,7 @@ type Server struct {
 	Mtx             sync.Mutex
 	UserCount       int
 	writer          *log.Logger
+	reader          *bufio.Scanner
 }
 
 func NewServer() *Server {
@@ -39,6 +40,7 @@ func NewServer() *Server {
 		inactiveClients: make(chan *models.Client),
 		UserCount:       0,
 		writer:          log.New(file, "", 0),
+		reader:          bufio.NewScanner(file),
 	}
 }
 
@@ -69,6 +71,9 @@ func (s *Server) handleConnection(client *models.Client) {
 	s.Welcome(client)
 	rd := bufio.NewReader(client.Connection)
 	name, err := rd.ReadString('\n')
+	if err != nil {
+		fmt.Println("error while reading name")
+	}
 	name = strings.Trim(name, "\r\n")
 	// log.Println(name)
 	client.Name = name
@@ -80,9 +85,7 @@ func (s *Server) handleConnection(client *models.Client) {
 	s.Clients = append(s.Clients, client)
 	s.UserCount++
 	s.Mtx.Unlock()
-	if err != nil {
-		fmt.Println("error while reading name")
-	}
+	s.lookForMessages(client)
 	// s.BroadCast(&models.Message{Text: fmt.Sprintf("%v entered chat", name), })
 	for {
 		dt := time.Now()
@@ -90,6 +93,7 @@ func (s *Server) handleConnection(client *models.Client) {
 		prefix := fmt.Sprintf("[%v][%v]:", timeStamp, name)
 		client.Connection.Write([]byte(prefix))
 		str, err := rd.ReadString('\n')
+		fmt.Printf("message length: %v\n", len(str))
 		if err != nil {
 			fmt.Println("error while reading from connection")
 			fmt.Println(err.Error())
@@ -142,6 +146,7 @@ func (s *Server) BroadCast(msg *models.Message) {
 }
 
 func (s *Server) writeToFile(line string) {
+	log.Println(len(line))
 	s.writer.Output(2, line)
 }
 
@@ -177,4 +182,12 @@ func (s *Server) Welcome(client *models.Client) {
 	msg := "Welcome to TCP-Chat!\n         _nnnn_\n        dGGGGMMb\n       @p~qp~~qMb\n       M|@||@) M|\n       @,----.JM|\n      JS^\\__/  qKL\n     dZP        qKRb\n    dZP          qKKb\n   fZP            SMMb\n   HZM            MMMM\n   FqM            MMMM\n __| \".        |\\dS\"qML\n |    `.       | `' \\Zq\n_)      \\.___.,|     .'\n\\____   )MMMMMP|   .'\n     `-'       `--'\n"
 	msg = msg + "[ENTER YOUR NAME]: "
 	client.Connection.Write([]byte(msg))
+}
+
+func (s *Server) lookForMessages(client *models.Client) {
+	// s.Mtx.Lock()
+	for s.reader.Scan() {
+		client.Connection.Write([]byte(s.reader.Text()))
+	}
+	// s.Mtx.Unlock()
 }
