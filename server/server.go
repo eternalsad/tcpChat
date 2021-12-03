@@ -26,9 +26,10 @@ type Server struct {
 	writer          *log.Logger
 	logs            *os.File
 	logsFilename    string
+	port            string
 }
 
-func NewServer() *Server {
+func NewServer(port string) *Server {
 	file, err := os.OpenFile("logs.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 
 	if err != nil {
@@ -43,13 +44,14 @@ func NewServer() *Server {
 		UserCount:       0,
 		writer:          log.New(file, "", 0),
 		logsFilename:    "logs.txt",
+		port:            port,
 		// logs:            file,
 		// reader:          bufio.NewScanner(file),
 	}
 }
 
 func (s *Server) Listen() error {
-	ln, err := net.Listen("tcp", ":4000")
+	ln, err := net.Listen("tcp", ":"+s.port)
 	if err != nil {
 		return err
 	}

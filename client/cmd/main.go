@@ -53,12 +53,7 @@ func main() {
 				if err != nil {
 					return err
 				}
-				// v.Clear()
-				// if len(buff)-1 > n && buff[n-1] != '\n' {
-				// 	fmt.Fprint(v, string(buff[:n-1]))
-				// }
 				fmt.Fprint(v, string(buff))
-				// fmt.Fprint(v, "\n")
 				return nil
 			})
 		}
@@ -128,8 +123,8 @@ func write(conn net.Conn, text []byte) {
 }
 
 func layout(g *gocui.Gui) error {
-	maxX, maxY := g.Size()
-	msgs, err := g.SetView("output", 0, 0, maxX-10, 25)
+	maxX, _ := g.Size()
+	output, err := g.SetView("output", 0, 0, maxX/2+9, 25)
 	if err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
@@ -137,11 +132,11 @@ func layout(g *gocui.Gui) error {
 		if _, err := g.SetCurrentView("output"); err != nil {
 			return err
 		}
-		msgs.Title = "Chat room"
-		msgs.Autoscroll = true
+		output.Title = "Chat room"
+		output.Autoscroll = true
 	}
 
-	input, err := g.SetView("input", 20, maxY-10, maxX-24, maxY-1)
+	input, err := g.SetView("input", maxX/2+10, 0, maxX-1, 25)
 	if err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
@@ -170,21 +165,22 @@ func initKeybindings(g *gocui.Gui, conn net.Conn) error {
 			if err != nil {
 				return err
 			}
-			// ctext := strings.TrimRight(string(text), " ")
-			g.Update(func(g *gocui.Gui) error {
-				fmt.Fprint(conn, string(text[:n]))
-				outputView, err := g.View("output")
-				if err != nil {
-					return err
-				}
+			fmt.Fprint(conn, string(text[:n]))
 
-				fmt.Fprint(outputView, string(text[:n]))
-				fmt.Fprint(outputView, "\n")
-				// fmt.Fprint(outputView, string("message"))
-				// fmt.Fprint(conn, string(text))
-				// write(conn, text[:n])
-				return nil
-			})
+			// g.Update(func(g *gocui.Gui) error {
+			outputView, err := g.View("output")
+			if err != nil {
+				return err
+			}
+			// outputView.Write(text[:n])
+			_, err = outputView.Write(text[:n])
+			if err != nil {
+				return err
+			}
+			// 	return nil
+			// })
+			fmt.Fprint(outputView, string(text[:n]))
+
 			v.Clear()
 			if err := v.SetCursor(0, 0); err != nil {
 				return err
